@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — IUO{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Real-time scheduling overview & system metrics{% endblock %}
+
+{% block header_actions %}
+<button id="btn-generate"
+  class="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white text-sm font-semibold
+         px-4 py-2 rounded-xl shadow-glow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+  <svg id="btn-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M13 10V3L4 14h7v7l9-11h-7z"/>
+  </svg>
+  <span id="btn-label">Run Scheduler</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- ── KPI row ──────────────────────────────────────────────────────────── -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+  <!-- Scheduled -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:0ms">
+    <div class="flex items-start justify-between mb-3">
+      <div class="w-10 h-10 rounded-xl bg-brand-600/20 flex items-center justify-center">
+        <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+        </svg>
+      </div>
+      <span class="text-xs text-slate-500 font-medium">Courses</span>
+    </div>
+    <p class="text-3xl font-bold text-white" id="stat-scheduled">—</p>
+    <p class="text-xs text-slate-500 mt-1">Scheduled this run</p>
+    <!-- mini progress -->
+    <div class="mt-3 h-1 bg-slate-700 rounded-full overflow-hidden">
+      <div class="progress-bar h-full" id="prog-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Completion -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:60ms">
+    <div class="flex items-start justify-between mb-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+      <span class="text-xs text-slate-500 font-medium">Completion</span>
+    </div>
+    <p class="text-3xl font-bold text-emerald-400" id="stat-pct">—</p>
+    <p class="text-xs text-slate-500 mt-1">Schedule coverage</p>
+  </div>
+
+  <!-- Conflicts -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:120ms">
+    <div class="flex items-start justify-between mb-3">
+      <div class="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+        <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+      <span class="text-xs text-slate-500 font-medium">Conflicts</span>
+    </div>
+    <p class="text-3xl font-bold text-rose-400" id="stat-conflicts">—</p>
+    <p class="text-xs text-slate-500 mt-1">Detected & resolved</p>
+  </div>
+
+  <!-- Messages -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:180ms">
+    <div class="flex items-start justify-between mb-3">
+      <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+      </div>
+      <span class="text-xs text-slate-500 font-medium">Messages</span>
+    </div>
+    <p class="text-3xl font-bold text-amber-400" id="stat-messages">—</p>
+    <p class="text-xs text-slate-500 mt-1">Agent communications</p>
+  </div>
+</div>
+
+<!-- ── Charts row ───────────────────────────────────────────────────────── -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+
+  <!-- Sessions per day — takes 2 cols -->
+  <div class="glass rounded-2xl p-5 xl:col-span-2 animate-slide-up" style="animation-delay:240ms">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-sm font-semibold text-white">Sessions per Day</p>
+        <p class="text-xs text-slate-500">Weekly distribution of scheduled sessions</p>
+      </div>
+      <span class="text-xs bg-brand-600/20 text-brand-300 px-2.5 py-1 rounded-full border border-brand-600/30">Weekly</span>
+    </div>
+    <div id="chart-day" style="height:220px"></div>
+  </div>
+
+  <!-- Room type donut -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:300ms">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-sm font-semibold text-white">Session Types</p>
+        <p class="text-xs text-slate-500">By room category</p>
+      </div>
+    </div>
+    <div id="chart-type" style="height:220px"></div>
+  </div>
+</div>
+
+<!-- ── Bottom row ───────────────────────────────────────────────────────── -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+  <!-- Time slot heatmap -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:360ms">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-sm font-semibold text-white">Slot Utilisation</p>
+        <p class="text-xs text-slate-500">Sessions per time slot across the week</p>
+      </div>
+    </div>
+    <div id="chart-heatmap" style="height:200px"></div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:420ms">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm font-semibold text-white">Agent Activity Log</p>
+      <button onclick="loadActivityLog()" class="text-xs text-brand-400 hover:text-brand-300 transition-colors">Refresh</button>
+    </div>
+    <div id="activity-log" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
+  </div>
+</div>
+
+<!-- Export strip -->
+<div class="mt-4 glass rounded-2xl p-4 flex items-center justify-between animate-slide-up" style="animation-delay:480ms">
+  <div>
+    <p class="text-sm font-semibold text-white">Export Timetable</p>
+    <p class="text-xs text-slate-500">Download the current schedule in your preferred format</p>
+  </div>
+  <div class="flex gap-3">
+    <a href="/api/export/csv"
+       class="flex items-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-600/30
+              text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      CSV
+    </a>
+    <a href="/api/export/pdf"
+       class="flex items-center gap-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-600/30
+              text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+      </svg>
+      PDF
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PLOTLY_LAYOUT = {
+  paper_bgcolor: 'transparent',
+  plot_bgcolor:  'transparent',
+  font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+  margin: { t: 10, b: 36, l: 36, r: 10 },
+  xaxis: { gridcolor: 'rgba(99,102,241,0.08)', zerolinecolor: 'rgba(99,102,241,0.1)' },
+  yaxis: { gridcolor: 'rgba(99,102,241,0.08)', zerolinecolor: 'rgba(99,102,241,0.1)' },
+};
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
+async function loadStats() {
+  const d = await fetch('/api/stats').then(r => r.json());
+  document.getElementById('stat-scheduled').textContent = `${d.scheduled}/${d.total_courses}`;
+  document.getElementById('stat-pct').textContent = `${d.completion_pct}%`;
+  document.getElementById('stat-conflicts').textContent = d.conflict_count;
+  document.getElementById('stat-messages').textContent = d.total_messages;
+  document.getElementById('prog-bar').style.width = `${d.completion_pct}%`;
+}
+
+async function loadCharts() {
+  const sessions = await fetch('/api/schedule').then(r => r.json());
+  const DAYS = ['Mon','Tue','Wed','Thu','Fri'];
+  const SLOTS = ['08:00','10:00','12:00','14:00','16:00'];
+
+  const dayCounts = Object.fromEntries(DAYS.map(d => [d, 0]));
+  const typeCounts = {};
+  const heatmap = {};
+  DAYS.forEach(d => { heatmap[d] = {}; SLOTS.forEach(s => heatmap[d][s] = 0); });
+
+  sessions.forEach(s => {
+    dayCounts[s.day] = (dayCounts[s.day] || 0) + 1;
+    typeCounts[s.room_type] = (typeCounts[s.room_type] || 0) + 1;
+    if (heatmap[s.day]) heatmap[s.day][s.time_slot] = (heatmap[s.day][s.time_slot] || 0) + 1;
+  });
+
+  // Bar chart
+  Plotly.newPlot('chart-day', [{
+    x: DAYS,
+    y: DAYS.map(d => dayCounts[d]),
+    type: 'bar',
+    marker: {
+      color: DAYS.map(d => dayCounts[d]),
+      colorscale: [[0,'rgba(99,102,241,0.3)'],[1,'rgba(99,102,241,0.9)']],
+      line: { color: 'rgba(99,102,241,0.5)', width: 1 }
+    },
+    hovertemplate: '<b>%{x}</b><br>%{y} sessions<extra></extra>',
+  }], { ...PLOTLY_LAYOUT }, PLOTLY_CONFIG);
+
+  // Donut
+  const typeColors = { lecture:'#6366f1', lab:'#10b981', tutorial:'#f59e0b' };
+  Plotly.newPlot('chart-type', [{
+    labels: Object.keys(typeCounts),
+    values: Object.values(typeCounts),
+    type: 'pie',
+    hole: 0.55,
+    marker: { colors: Object.keys(typeCounts).map(t => typeColors[t] || '#64748b') },
+    textinfo: 'label+percent',
+    textfont: { color: '#94a3b8', size: 11 },
+    hovertemplate: '<b>%{label}</b><br>%{value} sessions (%{percent})<extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT,
+    margin: { t: 10, b: 10, l: 10, r: 10 },
+    showlegend: false,
+  }, PLOTLY_CONFIG);
+
+  // Heatmap
+  const z = SLOTS.map(s => DAYS.map(d => heatmap[d]?.[s] || 0));
+  Plotly.newPlot('chart-heatmap', [{
+    z, x: DAYS, y: SLOTS,
+    type: 'heatmap',
+    colorscale: [[0,'rgba(99,102,241,0.05)'],[0.5,'rgba(99,102,241,0.4)'],[1,'rgba(99,102,241,0.9)']],
+    showscale: false,
+    hovertemplate: '<b>%{x} %{y}</b><br>%{z} sessions<extra></extra>',
+  }], {
+    ...PLOTLY_LAYOUT,
+    margin: { t: 10, b: 36, l: 50, r: 10 },
+    yaxis: { ...PLOTLY_LAYOUT.yaxis, autorange: 'reversed' },
+  }, PLOTLY_CONFIG);
+}
+
+async function loadActivityLog() {
+  const agents = await fetch('/api/agents').then(r => r.json());
+  const log = document.getElementById('activity-log');
+  const dotClass = { idle:'dot-idle', negotiating:'dot-negotiating', confirmed:'dot-confirmed', scheduling:'dot-scheduling', done:'dot-done' };
+  log.innerHTML = agents.slice(0, 15).map(a => `
+    <div class="flex items-center gap-2.5 py-1.5 border-b border-slate-700/30 last:border-0">
+      <span class="w-2 h-2 rounded-full shrink-0 ${dotClass[a.status] || 'dot-idle'}"></span>
+      <span class="text-xs text-brand-400 w-28 truncate shrink-0">${a.agent_id}</span>
+      <span class="text-xs text-slate-400 truncate">${a.last_action}</span>
+    </div>`).join('');
+}
+
+// Generate button
+document.getElementById('btn-generate').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-generate');
+  const label = document.getElementById('btn-label');
+  const icon = document.getElementById('btn-icon');
+  btn.disabled = true;
+  label.textContent = 'Running…';
+  icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>';
+  icon.classList.add('animate-spin');
+  try {
+    const r = await fetch('/api/generate', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) {
+      showToast(`${d.stats.scheduled}/${d.stats.total_courses} courses scheduled in ${d.stats.duration_seconds}s`, 'success');
+      await Promise.all([loadStats(), loadCharts(), loadActivityLog()]);
+    } else {
+      showToast(d.error || 'Scheduling failed', 'error');
+    }
+  } catch { showToast('Request failed', 'error'); }
+  finally {
+    btn.disabled = false;
+    label.textContent = 'Run Scheduler';
+    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>';
+    icon.classList.remove('animate-spin');
+  }
+});
+
+(async () => { await Promise.all([loadStats(), loadCharts(), loadActivityLog()]); })();
+</script>
+{% endblock %}

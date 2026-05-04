@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Agent Monitor — IUO{% endblock %}
+{% block page_title %}Agent Monitor{% endblock %}
+{% block page_subtitle %}Live status of all autonomous scheduling agents{% endblock %}
+
+{% block header_actions %}
+<button id="btn-refresh"
+  class="flex items-center gap-2 text-sm text-slate-300 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50
+         px-4 py-2 rounded-xl transition-all active:scale-95">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+  </svg>
+  Refresh
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Type summary pills -->
+<div class="flex flex-wrap gap-3 mb-6 animate-slide-up" id="type-summary"></div>
+
+<!-- Charts row -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:60ms">
+    <p class="text-sm font-semibold text-white mb-4">Messages per Agent Type</p>
+    <div id="chart-messages" style="height:240px"></div>
+  </div>
+  <div class="glass rounded-2xl p-5 animate-slide-up" style="animation-delay:120ms">
+    <p class="text-sm font-semibold text-white mb-4">Agent Status Distribution</p>
+    <div id="chart-status" style="height:240px"></div>
+  </div>
+</div>
+
+<!-- Agent table -->
+<div class="glass rounded-2xl overflow-hidden animate-slide-up" style="animation-delay:180ms">
+  <div class="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
+    <p class="text-sm font-semibold text-white">All Agents</p>
+    <div class="flex gap-2">
+      <input id="agent-search" type="text" placeholder="Search agents…"
+        class="bg-slate-800/60 border border-slate-600/50 text-slate-300 text-xs rounded-lg px-3 py-1.5
+               focus:outline-none focus:ring-2 focus:ring-brand-500/50 w-48 placeholder-slate-600 transition-all" />
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-slate-700/50 bg-slate-800/30">
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Agent</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Sent</th>
+          <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Received</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Action</th>
+        </tr>
+      </thead>
+      <tbody id="agent-table" class="divide-y divide-slate-700/30"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TYPE_COLORS = {
+  TeacherAgent:    '#6366f1',
+  GroupAgent:      '#10b981',
+  RoomAgent:       '#0891b2',
+  ConstraintAgent: '#f59e0b',
+  SchedulerAgent:  '#ef4444',
+};
+const STATUS_STYLES = {
+  idle:        'bg-slate-700/50 text-slate-400 border-slate-600/40',
+  negotiating: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  confirmed:   'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  scheduling:  'bg-brand-500/15 text-brand-300 border-brand-500/30',
+  done:        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+};
+const DOT_CLASS = {
+  idle: 'dot-idle', negotiating: 'dot-negotiating', confirmed: 'dot-confirmed',
+  scheduling: 'dot-scheduling', done: 'dot-done',
+};
+const PLOTLY_BASE = {
+  paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+  font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+  margin: { t: 10, b: 36, l: 10, r: 10 },
+};
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
+let allAgents = [];
+
+async function loadAgents() {
+  allAgents = await fetch('/api/agents').then(r => r.json());
+  renderSummary(allAgents);
+  renderCharts(allAgents);
+  renderTable(allAgents);
+}
+
+function renderSummary(agents) {
+  const typeCounts = {};
+  agents.forEach(a => { typeCounts[a.type] = (typeCounts[a.type] || 0) + 1; });
+  document.getElementById('type-summary').innerHTML = Object.entries(typeCounts).map(([t, c]) => `
+    <div class="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium"
+         style="background:${TYPE_COLORS[t]}18; border-color:${TYPE_COLORS[t]}40; color:${TYPE_COLORS[t]}">
+      <span class="w-2 h-2 rounded-full" style="background:${TYPE_COLORS[t]}"></span>
+      ${t} <span class="opacity-60 font-normal">(${c})</span>
+    </div>`).join('');
+}
+
+function renderCharts(agents) {
+  // Messages bar
+  const typeMsg = {};
+  agents.forEach(a => {
+    typeMsg[a.type] = (typeMsg[a.type] || 0) + a.messages_sent + a.messages_received;
+  });
+  Plotly.newPlot('chart-messages', [{
+    x: Object.keys(typeMsg),
+    y: Object.values(typeMsg),
+    type: 'bar',
+    marker: { color: Object.keys(typeMsg).map(t => TYPE_COLORS[t] || '#64748b'), opacity: 0.85 },
+    hovertemplate: '<b>%{x}</b><br>%{y} messages<extra></extra>',
+  }], {
+    ...PLOTLY_BASE,
+    margin: { t: 10, b: 60, l: 40, r: 10 },
+    xaxis: { tickangle: -20, gridcolor: 'rgba(99,102,241,0.08)' },
+    yaxis: { gridcolor: 'rgba(99,102,241,0.08)', title: { text: 'Messages', font: { size: 10 } } },
+  }, PLOTLY_CONFIG);
+
+  // Status donut
+  const statusCounts = {};
+  agents.forEach(a => { statusCounts[a.status] = (statusCounts[a.status] || 0) + 1; });
+  const statusColors = { idle:'#475569', negotiating:'#f59e0b', confirmed:'#10b981', scheduling:'#6366f1', done:'#10b981' };
+  Plotly.newPlot('chart-status', [{
+    labels: Object.keys(statusCounts),
+    values: Object.values(statusCounts),
+    type: 'pie', hole: 0.5,
+    marker: { colors: Object.keys(statusCounts).map(s => statusColors[s] || '#64748b') },
+    textinfo: 'label+value',
+    textfont: { color: '#94a3b8', size: 11 },
+    hovertemplate: '<b>%{label}</b><br>%{value} agents<extra></extra>',
+  }], {
+    ...PLOTLY_BASE,
+    margin: { t: 10, b: 10, l: 10, r: 10 },
+    showlegend: false,
+  }, PLOTLY_CONFIG);
+}
+
+function renderTable(agents) {
+  const query = document.getElementById('agent-search').value.toLowerCase();
+  const filtered = agents.filter(a =>
+    !query || a.agent_id.toLowerCase().includes(query) || a.name.toLowerCase().includes(query)
+  );
+  const tbody = document.getElementById('agent-table');
+  tbody.innerHTML = filtered.map(a => {
+    const ss = STATUS_STYLES[a.status] || STATUS_STYLES.idle;
+    const dc = DOT_CLASS[a.status] || 'dot-idle';
+    const tc = TYPE_COLORS[a.type] || '#64748b';
+    return `
+    <tr class="tbl-row">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2 h-2 rounded-full shrink-0 ${dc}"></span>
+          <div>
+            <p class="text-sm font-medium text-slate-200">${a.name}</p>
+            <p class="text-xs text-slate-500 font-mono">${a.agent_id}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-lg border"
+              style="background:${tc}18; border-color:${tc}40; color:${tc}">${a.type}</span>
+      </td>
+      <td class="px-4 py-3">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-lg border ${ss}">${a.status}</span>
+      </td>
+      <td class="px-4 py-3 text-right font-mono text-xs text-slate-300">${a.messages_sent}</td>
+      <td class="px-4 py-3 text-right font-mono text-xs text-slate-300">${a.messages_received}</td>
+      <td class="px-4 py-3 text-xs text-slate-400 max-w-xs truncate">${a.last_action}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('btn-refresh').addEventListener('click', loadAgents);
+document.getElementById('agent-search').addEventListener('input', () => renderTable(allAgents));
+
+loadAgents();
+</script>
+{% endblock %}

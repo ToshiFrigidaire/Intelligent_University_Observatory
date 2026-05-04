@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Timetable — IUO{% endblock %}
+{% block page_title %}Weekly Timetable{% endblock %}
+{% block page_subtitle %}Calendar grid — filter by teacher, group, room, or type{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2 text-xs text-slate-400">
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm badge-lecture inline-block"></span>Lecture</span>
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm badge-lab inline-block"></span>Lab</span>
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm badge-tutorial inline-block"></span>Tutorial</span>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filter bar -->
+<div class="glass rounded-2xl p-4 mb-5 flex flex-wrap gap-4 items-end animate-slide-up">
+  <div class="flex-1 min-w-36">
+    <label class="block text-xs font-medium text-slate-500 mb-1.5">Teacher</label>
+    <select id="filter-teacher" class="filter-select">
+      <option value="">All Teachers</option>
+    </select>
+  </div>
+  <div class="flex-1 min-w-36">
+    <label class="block text-xs font-medium text-slate-500 mb-1.5">Student Group</label>
+    <select id="filter-group" class="filter-select">
+      <option value="">All Groups</option>
+    </select>
+  </div>
+  <div class="flex-1 min-w-36">
+    <label class="block text-xs font-medium text-slate-500 mb-1.5">Room</label>
+    <select id="filter-room" class="filter-select">
+      <option value="">All Rooms</option>
+    </select>
+  </div>
+  <div class="flex-1 min-w-36">
+    <label class="block text-xs font-medium text-slate-500 mb-1.5">Type</label>
+    <select id="filter-type" class="filter-select">
+      <option value="">All Types</option>
+      <option value="lecture">Lecture</option>
+      <option value="lab">Lab</option>
+      <option value="tutorial">Tutorial</option>
+    </select>
+  </div>
+  <button id="btn-reset"
+    class="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 bg-slate-700/40 hover:bg-slate-700/70
+           px-4 py-2 rounded-xl border border-slate-600/40 transition-all">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </svg>
+    Reset
+  </button>
+  <div class="text-xs text-slate-500 self-end pb-2" id="filter-count"></div>
+</div>
+
+<!-- Stats strip -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5 animate-slide-up" style="animation-delay:40ms">
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-white" id="strip-total">—</p>
+    <p class="text-xs text-slate-500 mt-1">Sessions</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-brand-400" id="strip-teachers">—</p>
+    <p class="text-xs text-slate-500 mt-1">Teachers</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-emerald-400" id="strip-rooms">—</p>
+    <p class="text-xs text-slate-500 mt-1">Rooms Used</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-amber-400" id="strip-groups">—</p>
+    <p class="text-xs text-slate-500 mt-1">Groups</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <div class="flex justify-center gap-2 text-xs font-semibold" id="strip-types">—</div>
+    <p class="text-xs text-slate-500 mt-1">By Type</p>
+  </div>
+</div>
+
+<!-- View toggle + export -->
+<div class="glass rounded-2xl p-5 mb-5 animate-slide-up" style="animation-delay:80ms">
+  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+    <p class="text-sm font-semibold text-white">Schedule</p>
+    <div class="flex gap-2 flex-wrap">
+      <div class="flex gap-1 bg-slate-800/60 rounded-xl p-1 border border-slate-700/40">
+        <button id="view-calendar" onclick="setView('calendar')"
+          class="view-btn-active text-xs px-3 py-1.5 rounded-lg font-medium transition-all">Calendar</button>
+        <button id="view-table" onclick="setView('table')"
+          class="view-btn-inactive text-xs px-3 py-1.5 rounded-lg font-medium transition-all">Table</button>
+      </div>
+      <a href="/api/export/csv"
+        class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-700/40 hover:bg-slate-700/70
+               px-3 py-1.5 rounded-xl border border-slate-600/40 transition-all">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        CSV
+      </a>
+      <a href="/api/export/pdf"
+        class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-700/40 hover:bg-slate-700/70
+               px-3 py-1.5 rounded-xl border border-slate-600/40 transition-all">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Calendar view -->
+  <div id="view-calendar-content">
+    <!-- Day utilization bars -->
+    <div id="day-util" class="grid grid-cols-5 gap-2 mb-4"></div>
+
+    <!-- Calendar grid -->
+    <div class="overflow-x-auto">
+      <div id="calendar-grid" class="min-w-[700px]">
+        <!-- built by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Table view -->
+  <div id="view-table-content" class="hidden overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left border-b border-slate-700/50">
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Course</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Teacher</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Group</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Capacity</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Day</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
+          <th class="pb-3 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+          <th class="pb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+        </tr>
+      </thead>
+      <tbody id="session-table" class="divide-y divide-slate-700/30"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Session detail modal -->
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal()"></div>
+  <div class="relative glass rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-slide-up">
+    <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .filter-select {
+    width: 100%;
+    background: rgba(30,41,59,0.6);
+    border: 1px solid rgba(99,102,241,0.2);
+    color: #cbd5e1;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: all 0.2s;
+  }
+  .filter-select:focus {
+    border-color: rgba(99,102,241,0.5);
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+  }
+
+  .view-btn-active  { background: rgba(99,102,241,0.25); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.35); }
+  .view-btn-inactive { color: #64748b; border: 1px solid transparent; }
+  .view-btn-inactive:hover { color: #94a3b8; background: rgba(99,102,241,0.08); }
+
+  /* Calendar grid */
+  .cal-header-day {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #a5b4fc;
+  }
+  .cal-time-label {
+    font-size: 0.7rem;
+    color: #475569;
+    font-weight: 500;
+    text-align: right;
+    padding-right: 0.75rem;
+    padding-top: 0.6rem;
+    white-space: nowrap;
+  }
+  .cal-cell {
+    min-height: 80px;
+    border: 1px solid rgba(99,102,241,0.07);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    background: rgba(15,23,42,0.3);
+    vertical-align: top;
+    position: relative;
+  }
+  .cal-cell:hover { background: rgba(99,102,241,0.05); }
+
+  /* Session card */
+  .session-card {
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    margin-bottom: 0.2rem;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border-left: 3px solid;
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+  .session-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .card-lecture  { background: rgba(99,102,241,0.15); border-color: #6366f1; }
+  .card-lab      { background: rgba(16,185,129,0.15); border-color: #10b981; }
+  .card-tutorial { background: rgba(245,158,11,0.15); border-color: #f59e0b; }
+
+  .card-course { font-weight: 600; color: #e2e8f0; margin-bottom: 2px; }
+  .card-meta   { color: #94a3b8; }
+  .card-room   { color: #64748b; font-size: 0.65rem; margin-top: 2px; }
+
+  /* Util bar */
+  .util-bar-wrap { background: rgba(15,23,42,0.5); border-radius: 99px; height: 4px; overflow: hidden; margin-top: 4px; }
+  .util-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#6366f1,#8b5cf6); transition: width 0.6s ease; }
+
+  /* Status badge */
+  .status-confirmed { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+  .status-conflict  { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+  .status-pending   { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+</style>
+
+<script>
+const DAYS  = ['Mon','Tue','Wed','Thu','Fri'];
+const SLOTS = ['08:00','10:00','12:00','14:00','16:00'];
+const DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday' };
+
+let allSessions = [];
+let currentView = 'calendar';
+
+// ── View toggle ──────────────────────────────────────────────────────────────
+function setView(v) {
+  currentView = v;
+  document.getElementById('view-calendar-content').classList.toggle('hidden', v !== 'calendar');
+  document.getElementById('view-table-content').classList.toggle('hidden', v !== 'table');
+  document.getElementById('view-calendar').className = v === 'calendar' ? 'view-btn-active text-xs px-3 py-1.5 rounded-lg font-medium transition-all' : 'view-btn-inactive text-xs px-3 py-1.5 rounded-lg font-medium transition-all';
+  document.getElementById('view-table').className    = v === 'table'    ? 'view-btn-active text-xs px-3 py-1.5 rounded-lg font-medium transition-all' : 'view-btn-inactive text-xs px-3 py-1.5 rounded-lg font-medium transition-all';
+}
+
+// ── Filters ──────────────────────────────────────────────────────────────────
+async function loadFilters() {
+  const d = await fetch('/api/filters').then(r => r.json());
+  const fill = (id, items, lk, vk) => {
+    const el = document.getElementById(id);
+    items.forEach(i => {
+      const o = document.createElement('option');
+      o.value = i[vk]; o.textContent = i[lk]; el.appendChild(o);
+    });
+  };
+  fill('filter-teacher', d.teachers, 'name', 'name');
+  fill('filter-group',   d.groups,   'name', 'name');
+  fill('filter-room',    d.rooms,    'name', 'id');
+}
+
+async function loadSessions() {
+  allSessions = await fetch('/api/schedule').then(r => r.json());
+  renderAll();
+}
+
+function getFiltered() {
+  const t  = document.getElementById('filter-teacher').value;
+  const g  = document.getElementById('filter-group').value;
+  const rm = document.getElementById('filter-room').value;
+  const tp = document.getElementById('filter-type').value;
+  return allSessions.filter(s =>
+    (!t  || s.teacher_name === t) &&
+    (!g  || s.group_name === g) &&
+    (!rm || String(s.room_id) === rm) &&
+    (!tp || s.room_type === tp)
+  );
+}
+
+function renderAll() {
+  const sessions = getFiltered();
+  document.getElementById('filter-count').textContent =
+    `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
+  renderStrip(sessions);
+  renderCalendar(sessions);
+  renderTable(sessions);
+  renderDayUtil(sessions);
+}
+
+// ── Stats strip ──────────────────────────────────────────────────────────────
+function renderStrip(sessions) {
+  document.getElementById('strip-total').textContent    = sessions.length;
+  document.getElementById('strip-teachers').textContent = new Set(sessions.map(s => s.teacher_name)).size;
+  document.getElementById('strip-rooms').textContent    = new Set(sessions.map(s => s.room_id)).size;
+  document.getElementById('strip-groups').textContent   = new Set(sessions.map(s => s.group_name)).size;
+
+  const counts = { lecture: 0, lab: 0, tutorial: 0 };
+  sessions.forEach(s => { if (counts[s.room_type] !== undefined) counts[s.room_type]++; });
+  const colors = { lecture: 'text-brand-400', lab: 'text-emerald-400', tutorial: 'text-amber-400' };
+  document.getElementById('strip-types').innerHTML = Object.entries(counts)
+    .filter(([,v]) => v > 0)
+    .map(([k,v]) => `<span class="${colors[k]} font-bold">${v}</span><span class="text-slate-600 text-xs">${k.slice(0,3)}</span>`)
+    .join('<span class="text-slate-700 mx-0.5">·</span>') || '<span class="text-slate-600">—</span>';
+}
+
+// ── Day utilization bars ─────────────────────────────────────────────────────
+function renderDayUtil(sessions) {
+  const maxPerDay = SLOTS.length; // max possible sessions per day
+  const counts = {};
+  DAYS.forEach(d => counts[d] = 0);
+  sessions.forEach(s => { if (counts[s.day] !== undefined) counts[s.day]++; });
+  const maxCount = Math.max(...Object.values(counts), 1);
+
+  document.getElementById('day-util').innerHTML = DAYS.map(d => {
+    const pct = Math.round((counts[d] / maxCount) * 100);
+    return `
+      <div class="text-center">
+        <div class="text-xs font-semibold text-slate-400 mb-1">${d}</div>
+        <div class="text-xs font-bold text-white">${counts[d]}</div>
+        <div class="util-bar-wrap mt-1"><div class="util-bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+}
+
+// ── Calendar grid ────────────────────────────────────────────────────────────
+function renderCalendar(sessions) {
+  // Build lookup: day -> slot -> [sessions]
+  const map = {};
+  DAYS.forEach(d => { map[d] = {}; SLOTS.forEach(sl => map[d][sl] = []); });
+  sessions.forEach(s => {
+    if (map[s.day] && map[s.day][s.time_slot]) map[s.day][s.time_slot].push(s);
+    else if (map[s.day]) {
+      if (!map[s.day][s.time_slot]) map[s.day][s.time_slot] = [];
+      map[s.day][s.time_slot].push(s);
+    }
+  });
+
+  // Build table
+  const colW = 'width:calc((100% - 64px)/5)';
+  let html = `<table style="width:100%;border-collapse:separate;border-spacing:4px;">`;
+
+  // Header row
+  html += `<thead><tr>`;
+  html += `<th style="width:64px"></th>`;
+  DAYS.forEach(d => {
+    const cnt = sessions.filter(s => s.day === d).length;
+    html += `<th style="${colW}"><div class="cal-header-day">${DAY_FULL[d]}<span class="ml-1.5 text-slate-500 font-normal">(${cnt})</span></div></th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  // Slot rows
+  SLOTS.forEach(slot => {
+    html += `<tr>`;
+    html += `<td class="cal-time-label">${slot}</td>`;
+    DAYS.forEach(d => {
+      const cells = (map[d][slot] || []);
+      html += `<td class="cal-cell">`;
+      cells.forEach(s => {
+        html += `<div class="session-card card-${s.room_type}" onclick="openModal(${s.session_id})">
+          <div class="card-course">${escHtml(s.course_name)}</div>
+          <div class="card-meta">👤 ${escHtml(s.teacher_name)}</div>
+          <div class="card-meta">👥 ${escHtml(s.group_name)}</div>
+          <div class="card-room">🏛 Room ${s.room_id} · cap ${s.room_capacity}</div>
+        </div>`;
+      });
+      html += `</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>`;
+  document.getElementById('calendar-grid').innerHTML = html;
+}
+
+// ── Table view ───────────────────────────────────────────────────────────────
+function renderTable(sessions) {
+  const sorted = [...sessions].sort((a,b) => {
+    const di = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
+    return di !== 0 ? di : SLOTS.indexOf(a.time_slot) - SLOTS.indexOf(b.time_slot);
+  });
+  document.getElementById('session-table').innerHTML = sorted.map(s => `
+    <tr class="tbl-row cursor-pointer" onclick="openModal(${s.session_id})">
+      <td class="py-3 pr-4 font-medium text-slate-200">${escHtml(s.course_name)}</td>
+      <td class="py-3 pr-4 text-slate-400">${escHtml(s.teacher_name)}</td>
+      <td class="py-3 pr-4 text-slate-400">${escHtml(s.group_name)}</td>
+      <td class="py-3 pr-4 text-slate-400">Room ${s.room_id}</td>
+      <td class="py-3 pr-4 text-slate-400 text-xs">${s.room_capacity}</td>
+      <td class="py-3 pr-4 text-slate-300 font-medium">${s.day}</td>
+      <td class="py-3 pr-4 text-slate-300 font-mono text-xs">${s.time_slot}</td>
+      <td class="py-3 pr-4"><span class="px-2 py-0.5 rounded-lg text-xs font-medium badge-${s.room_type}">${s.room_type}</span></td>
+      <td class="py-3"><span class="px-2 py-0.5 rounded-lg text-xs font-medium status-${s.status}">${s.status}</span></td>
+    </tr>`).join('');
+}
+
+// ── Modal ────────────────────────────────────────────────────────────────────
+function openModal(sessionId) {
+  const s = allSessions.find(x => x.session_id === sessionId);
+  if (!s) return;
+  const typeColors = { lecture: '#6366f1', lab: '#10b981', tutorial: '#f59e0b' };
+  const color = typeColors[s.room_type] || '#64748b';
+  document.getElementById('modal-content').innerHTML = `
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+           style="background:${color}22;border:1px solid ${color}44">📅</div>
+      <div>
+        <p class="font-semibold text-white text-sm">${escHtml(s.course_name)}</p>
+        <span class="px-2 py-0.5 rounded-lg text-xs font-medium badge-${s.room_type}">${s.room_type}</span>
+      </div>
+    </div>
+    <div class="space-y-2.5 text-sm">
+      ${row('👤','Teacher', s.teacher_name)}
+      ${row('👥','Group', s.group_name)}
+      ${row('🏛','Room', `Room ${s.room_id} (capacity ${s.room_capacity})`)}
+      ${row('📆','Day', DAY_FULL[s.day] || s.day)}
+      ${row('🕐','Time', s.time_slot)}
+      ${row('🔖','Status', `<span class="px-2 py-0.5 rounded-lg text-xs font-medium status-${s.status}">${s.status}</span>`)}
+    </div>`;
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
+}
+
+function row(icon, label, value) {
+  return `<div class="flex items-start gap-2">
+    <span class="text-base leading-none mt-0.5">${icon}</span>
+    <div><span class="text-slate-500 text-xs">${label}</span><br>
+    <span class="text-slate-200">${value}</span></div>
+  </div>`;
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal').classList.remove('flex');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Event listeners ──────────────────────────────────────────────────────────
+['filter-teacher','filter-group','filter-room','filter-type'].forEach(id =>
+  document.getElementById(id).addEventListener('change', renderAll)
+);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  ['filter-teacher','filter-group','filter-room','filter-type'].forEach(id =>
+    document.getElementById(id).value = '');
+  renderAll();
+});
+
+(async () => { await loadFilters(); await loadSessions(); })();
+</script>
+{% endblock %}

@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Data Management — IUO{% endblock %}
+{% block page_title %}Data Management{% endblock %}
+{% block page_subtitle %}CRUD for teachers, groups, classrooms, and courses{% endblock %}
+
+{% block header_actions %}
+<button onclick="reseed()"
+  class="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 hover:bg-amber-500/20
+         px-3 py-1.5 rounded-xl border border-amber-500/30 transition-all font-medium">
+  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+  </svg>
+  Randomise &amp; Reseed
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tab bar -->
+<div class="glass rounded-2xl p-1.5 mb-5 flex gap-1 animate-slide-up w-fit">
+  {% for tab in ['teachers','groups','classrooms','courses'] %}
+  <button id="tab-{{ tab }}" onclick="switchTab('{{ tab }}')"
+    class="tab-btn text-sm px-4 py-2 rounded-xl font-medium transition-all capitalize">
+    {{ tab }}
+  </button>
+  {% endfor %}
+</div>
+
+<!-- Panels -->
+{% for entity in ['teachers','groups','classrooms','courses'] %}
+<div id="panel-{{ entity }}" class="panel hidden animate-slide-up">
+  <div class="glass rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm font-semibold text-white capitalize">{{ entity }}</p>
+      <button onclick="openForm('{{ entity }}')"
+        class="flex items-center gap-1.5 text-xs text-brand-300 bg-brand-500/10 hover:bg-brand-500/20
+               px-3 py-1.5 rounded-xl border border-brand-500/30 transition-all font-medium">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Add {{ entity[:-1]|capitalize }}
+      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="tbl-{{ entity }}">
+        <thead id="thead-{{ entity }}"></thead>
+        <tbody id="tbody-{{ entity }}" class="divide-y divide-slate-700/30"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Modal form -->
+<div id="form-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeForm()"></div>
+  <div class="relative glass rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up">
+    <button onclick="closeForm()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <h2 id="form-title" class="text-base font-semibold text-white mb-4"></h2>
+    <div id="form-fields" class="space-y-3"></div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="submitForm()"
+        class="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium py-2 rounded-xl transition-colors">
+        Save
+      </button>
+      <button onclick="closeForm()"
+        class="px-4 text-slate-400 hover:text-slate-200 text-sm border border-slate-600/40 rounded-xl transition-colors">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .tab-btn         { color: #64748b; }
+  .tab-btn:hover   { color: #94a3b8; background: rgba(99,102,241,0.08); }
+  .tab-btn-active  { background: rgba(99,102,241,0.2); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+  .th { padding-bottom: 0.75rem; padding-right: 1rem; font-size: 0.7rem; font-weight: 600;
+        color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
+  .td { padding: 0.65rem 1rem 0.65rem 0; color: #cbd5e1; font-size: 0.8rem; }
+  .td-muted { color: #64748b; }
+  .form-input {
+    width: 100%; background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.2);
+    color: #cbd5e1; font-size: 0.875rem; border-radius: 0.75rem; padding: 0.5rem 0.75rem;
+    outline: none; transition: all 0.2s;
+  }
+  .form-input:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+  .form-label { display: block; font-size: 0.75rem; font-weight: 500; color: #64748b; margin-bottom: 0.375rem; }
+  .btn-del { color: #f87171; font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 0.5rem;
+             border: 1px solid rgba(239,68,68,0.25); transition: all 0.15s; }
+  .btn-del:hover { background: rgba(239,68,68,0.1); }
+  .btn-edit { color: #a5b4fc; font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 0.5rem;
+              border: 1px solid rgba(99,102,241,0.25); transition: all 0.15s; margin-right: 0.25rem; }
+  .btn-edit:hover { background: rgba(99,102,241,0.1); }
+</style>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let _cache = { teachers: [], groups: [], classrooms: [], courses: [] };
+let _formEntity = null;
+let _formId     = null;  // null = create, number = edit
+
+const DAYS  = ['Mon','Tue','Wed','Thu','Fri'];
+const SLOTS = ['08:00','10:00','12:00','14:00','16:00'];
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(entity) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.className = b.className.replace('tab-btn-active','').trim();
+  });
+  document.getElementById('panel-' + entity).classList.remove('hidden');
+  const btn = document.getElementById('tab-' + entity);
+  btn.classList.add('tab-btn-active');
+  loadEntity(entity);
+}
+
+// ── Load & render ─────────────────────────────────────────────────────────────
+async function loadEntity(entity) {
+  const data = await fetch('/api/' + entity).then(r => r.json());
+  _cache[entity] = data;
+  renderTable(entity, data);
+}
+
+function renderTable(entity, data) {
+  const thead = document.getElementById('thead-' + entity);
+  const tbody = document.getElementById('tbody-' + entity);
+
+  const configs = {
+    teachers: {
+      headers: ['Name','Available Days','Preferred Slots','Max Hrs/Wk','Courses',''],
+      row: t => [
+        `<span class="font-medium text-slate-200">${esc(t.name)}</span>`,
+        `<span class="text-xs">${t.available_days.join(', ')}</span>`,
+        `<span class="text-xs font-mono">${t.preferred_slots.join(', ')}</span>`,
+        t.max_hours_per_week,
+        `<span class="text-slate-500">${t.course_count}</span>`,
+        actions('teachers', t.teacher_id),
+      ],
+    },
+    groups: {
+      headers: ['Program','Year','Size','Courses',''],
+      row: g => [
+        `<span class="font-medium text-slate-200">${esc(g.program)}</span>`,
+        `Y${g.year}`,
+        g.group_size,
+        `<span class="text-slate-500">${g.course_count}</span>`,
+        actions('groups', g.group_id),
+      ],
+    },
+    classrooms: {
+      headers: ['Room ID','Capacity','Equipment','Sessions',''],
+      row: r => [
+        `<span class="font-mono text-brand-400">#${r.room_id}</span>`,
+        r.capacity,
+        `<span class="text-xs">${r.equipment.join(', ')}</span>`,
+        `<span class="text-slate-500">${r.session_count}</span>`,
+        actions('classrooms', r.room_id),
+      ],
+    },
+    courses: {
+      headers: ['Course','Teacher','Group','Type','Duration',''],
+      row: c => [
+        `<span class="font-medium text-slate-200">${esc(c.course_name)}</span>`,
+        `<span class="td-muted">${esc(c.teacher_name)}</span>`,
+        `<span class="td-muted">${esc(c.group_name)}</span>`,
+        `<span class="px-2 py-0.5 rounded-lg text-xs font-medium badge-${c.required_room_type}">${c.required_room_type}</span>`,
+        `${c.duration_hours}h`,
+        actions('courses', c.course_id),
+      ],
+    },
+  };
+
+  const cfg = configs[entity];
+  thead.innerHTML = `<tr>${cfg.headers.map(h => `<th class="th">${h}</th>`).join('')}</tr>`;
+  tbody.innerHTML = data.length
+    ? data.map(item => `<tr class="tbl-row">${cfg.row(item).map(v => `<td class="td">${v}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cfg.headers.length}" class="td text-slate-600 text-center py-8">No records found</td></tr>`;
+}
+
+function actions(entity, id) {
+  return `<button class="btn-edit" onclick="openForm('${entity}',${id})">Edit</button>
+          <button class="btn-del"  onclick="deleteRecord('${entity}',${id})">Delete</button>`;
+}
+
+// ── Form ──────────────────────────────────────────────────────────────────────
+function openForm(entity, id = null) {
+  _formEntity = entity;
+  _formId     = id;
+  const existing = id ? _cache[entity].find(x => Object.values(x)[0] === id) : null;
+  document.getElementById('form-title').textContent = (id ? 'Edit ' : 'Add ') + entity.slice(0,-1);
+  document.getElementById('form-fields').innerHTML  = buildFields(entity, existing);
+  document.getElementById('form-modal').classList.remove('hidden');
+  document.getElementById('form-modal').classList.add('flex');
+}
+
+function closeForm() {
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.remove('flex');
+  _formEntity = null; _formId = null;
+}
+
+function buildFields(entity, data) {
+  const v = (k, def='') => data ? (data[k] ?? def) : def;
+  const inp = (name, label, value, type='text') =>
+    `<div><label class="form-label">${label}</label>
+     <input class="form-input" name="${name}" type="${type}" value="${esc(String(value))}"></div>`;
+  const sel = (name, label, options, value) =>
+    `<div><label class="form-label">${label}</label>
+     <select class="form-input" name="${name}">
+       ${options.map(o => `<option value="${o.v}" ${o.v==value?'selected':''}>${o.l}</option>`).join('')}
+     </select></div>`;
+  const chk = (name, label, all, selected) =>
+    `<div><label class="form-label">${label}</label>
+     <div class="flex flex-wrap gap-2">${all.map(x =>
+       `<label class="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
+         <input type="checkbox" name="${name}" value="${x}" ${selected.includes(x)?'checked':''} class="accent-brand-500"> ${x}
+       </label>`).join('')}</div></div>`;
+
+  if (entity === 'teachers') return [
+    inp('name', 'Full Name', v('name')),
+    chk('available_days', 'Available Days', DAYS, v('available_days', DAYS)),
+    chk('preferred_slots', 'Preferred Slots', SLOTS, v('preferred_slots', ['08:00','10:00'])),
+    inp('max_hours_per_week', 'Max Hours / Week', v('max_hours_per_week', 20), 'number'),
+  ].join('');
+
+  if (entity === 'groups') return [
+    inp('program', 'Program', v('program')),
+    inp('year', 'Year', v('year', 1), 'number'),
+    inp('group_size', 'Group Size', v('group_size', 30), 'number'),
+  ].join('');
+
+  if (entity === 'classrooms') return [
+    inp('capacity', 'Capacity', v('capacity', 60), 'number'),
+    chk('equipment', 'Equipment', ['projector','whiteboard','computers','lab','electronics'],
+        v('equipment', ['projector','whiteboard'])),
+  ].join('');
+
+  if (entity === 'courses') {
+    const teacherOpts = _cache.teachers.map(t => ({ v: t.teacher_id, l: t.name }));
+    const groupOpts   = _cache.groups.map(g => ({ v: g.group_id, l: g.program + ' Y' + g.year }));
+    return [
+      inp('course_name', 'Course Name', v('course_name')),
+      sel('teacher_id', 'Teacher', teacherOpts, v('teacher_id')),
+      sel('group_id', 'Student Group', groupOpts, v('group_id')),
+      sel('required_room_type', 'Room Type',
+          [{v:'lecture',l:'Lecture'},{v:'lab',l:'Lab'},{v:'tutorial',l:'Tutorial'}],
+          v('required_room_type','lecture')),
+      inp('duration_hours', 'Duration (hours)', v('duration_hours', 2), 'number'),
+    ].join('');
+  }
+  return '';
+}
+
+async function submitForm() {
+  const entity  = _formEntity;
+  const id      = _formId;
+  const fields  = document.getElementById('form-fields');
+  const body    = {};
+
+  fields.querySelectorAll('input[type=text], input[type=number], select').forEach(el => {
+    body[el.name] = el.type === 'number' ? Number(el.value) : el.value;
+  });
+  // checkboxes → arrays
+  const cbGroups = {};
+  fields.querySelectorAll('input[type=checkbox]:checked').forEach(el => {
+    if (!cbGroups[el.name]) cbGroups[el.name] = [];
+    cbGroups[el.name].push(el.value);
+  });
+  Object.assign(body, cbGroups);
+
+  const url    = id ? `/api/${entity}/${id}` : `/api/${entity}`;
+  const method = id ? 'PUT' : 'POST';
+  const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const json   = await res.json();
+
+  if (!res.ok) { showToast(json.error || 'Error', 'error'); return; }
+  showToast(json.message, 'success');
+  closeForm();
+  loadEntity(entity);
+}
+
+async function deleteRecord(entity, id) {
+  if (!confirm('Delete this record?')) return;
+  const res  = await fetch(`/api/${entity}/${id}`, { method: 'DELETE' });
+  const json = await res.json();
+  if (!res.ok) { showToast(json.error || 'Error', 'error'); return; }
+  showToast(json.message, 'success');
+  loadEntity(entity);
+}
+
+// ── Reseed ────────────────────────────────────────────────────────────────────
+async function reseed() {
+  if (!confirm('This will wipe all current data and generate a new random scenario. Continue?')) return;
+  const res  = await fetch('/api/reseed', { method: 'POST' });
+  const json = await res.json();
+  if (!res.ok) { showToast(json.error || 'Reseed failed', 'error'); return; }
+  const c = json.counts;
+  showToast(`Reseeded: ${c.teachers} teachers, ${c.groups} groups, ${c.classrooms} rooms, ${c.courses} courses`, 'success');
+  loadEntity(_formEntity || 'teachers');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+// Pre-load all caches so course form can reference teachers/groups immediately
+(async () => {
+  await Promise.all(['teachers','groups','classrooms','courses'].map(e => loadEntity(e)));
+  switchTab('teachers');
+})();
+</script>
+{% endblock %}

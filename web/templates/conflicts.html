@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Conflict Log — IUO{% endblock %}
+{% block page_title %}Conflict Log{% endblock %}
+{% block page_subtitle %}Scheduling conflicts, negotiation attempts, and resolution outcomes{% endblock %}
+
+{% block content %}
+
+<!-- KPI strip -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5 animate-slide-up">
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-white"    id="c-total">—</p>
+    <p class="text-xs text-slate-500 mt-1">Total Conflicts</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-emerald-400" id="c-resolved">—</p>
+    <p class="text-xs text-slate-500 mt-1">Resolved</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-rose-400"  id="c-open">—</p>
+    <p class="text-xs text-slate-500 mt-1">Unresolved</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-amber-400" id="c-courses">—</p>
+    <p class="text-xs text-slate-500 mt-1">Courses Affected</p>
+  </div>
+  <div class="glass rounded-2xl p-4 text-center">
+    <p class="text-2xl font-bold text-brand-400" id="c-rate">—</p>
+    <p class="text-xs text-slate-500 mt-1">Resolution Rate</p>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5 animate-slide-up" style="animation-delay:50ms">
+  <div class="glass rounded-2xl p-5">
+    <p class="text-sm font-semibold text-white mb-3">Conflicts by Reason</p>
+    <div id="chart-reasons" style="height:220px"></div>
+  </div>
+  <div class="glass rounded-2xl p-5">
+    <p class="text-sm font-semibold text-white mb-3">Conflicts by Day &amp; Slot</p>
+    <div id="chart-heatmap" style="height:220px"></div>
+  </div>
+</div>
+
+<!-- Most-conflicted courses -->
+<div class="glass rounded-2xl p-5 mb-5 animate-slide-up" style="animation-delay:80ms">
+  <p class="text-sm font-semibold text-white mb-3">Most Conflicted Courses</p>
+  <div id="top-courses" class="space-y-2"></div>
+</div>
+
+<!-- Detail table -->
+<div class="glass rounded-2xl overflow-hidden animate-slide-up" style="animation-delay:110ms">
+  <div class="px-5 py-4 border-b border-slate-700/50 flex flex-wrap items-center gap-3">
+    <p class="text-sm font-semibold text-white flex-1">Conflict Details</p>
+    <select id="filter-resolved" class="filter-sel">
+      <option value="">All statuses</option>
+      <option value="yes">Resolved</option>
+      <option value="no">Unresolved</option>
+    </select>
+    <select id="filter-reason" class="filter-sel">
+      <option value="">All reasons</option>
+    </select>
+    <select id="filter-day" class="filter-sel">
+      <option value="">All days</option>
+      <option>Mon</option><option>Tue</option><option>Wed</option>
+      <option>Thu</option><option>Fri</option>
+    </select>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-slate-700/50 bg-slate-800/30">
+          <th class="th px-5">#</th>
+          <th class="th px-4">Course</th>
+          <th class="th px-4">Teacher</th>
+          <th class="th px-4">Group</th>
+          <th class="th px-4">Rejected Slot</th>
+          <th class="th px-4">Room</th>
+          <th class="th px-4">Reason</th>
+          <th class="th px-4">Attempt</th>
+          <th class="th px-4">Outcome</th>
+        </tr>
+      </thead>
+      <tbody id="conflict-table" class="divide-y divide-slate-700/30"></tbody>
+    </table>
+  </div>
+
+  <div class="px-5 py-4 border-t border-slate-700/50 flex items-center justify-between">
+    <p class="text-xs text-slate-500" id="page-info"></p>
+    <div class="flex gap-2" id="pagination"></div>
+  </div>
+</div>
+
+<!-- Detail modal -->
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal()"></div>
+  <div class="relative glass rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-slide-up">
+    <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .filter-sel {
+    background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.2);
+    color: #cbd5e1; font-size: 0.75rem; border-radius: 0.5rem;
+    padding: 0.35rem 0.65rem; outline: none; transition: all 0.2s;
+  }
+  .filter-sel:focus { border-color: rgba(99,102,241,0.5); }
+  .th { padding-top: 0.75rem; padding-bottom: 0.75rem; font-size: 0.7rem;
+        font-weight: 600; color: #475569; text-transform: uppercase;
+        letter-spacing: 0.05em; text-align: left; white-space: nowrap; }
+  .td { padding: 0.6rem 1rem 0.6rem 0; vertical-align: middle; }
+
+  /* reason pill colours */
+  .reason-group   { background: rgba(239,68,68,0.12);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+  .reason-teacher { background: rgba(245,158,11,0.12); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+  .reason-no-cand { background: rgba(100,116,139,0.15);color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+
+  .bar-bg   { background: rgba(99,102,241,0.12); border-radius: 99px; height: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#6366f1,#8b5cf6); transition: width 0.6s ease; }
+  .bar-fill-rose { background: linear-gradient(90deg,#ef4444,#f87171); }
+</style>
+
+<script>
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+const PER_PAGE = 15;
+let allConflicts = [];
+let currentPage  = 1;
+
+// ── Reason helpers ────────────────────────────────────────────────────────────
+function reasonLabel(r) {
+  if (!r) return '—';
+  if (r.includes('exceeds'))      return 'Group daily limit';
+  if (r.includes('consecutive'))  return 'Teacher consecutive limit';
+  if (r === 'no_valid_candidate_found') return 'No valid slot/room';
+  return r.replace(/_/g, ' ');
+}
+function reasonClass(r) {
+  if (!r) return '';
+  if (r.includes('exceeds') || r.includes('group'))       return 'reason-group';
+  if (r.includes('consecutive') || r.includes('teacher')) return 'reason-teacher';
+  return 'reason-no-cand';
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+async function loadAll() {
+  const d = await fetch('/api/conflicts?page=1&per_page=9999').then(r => r.json());
+  allConflicts = d.conflicts;
+
+  const total    = allConflicts.length;
+  const resolved = allConflicts.filter(c => c.resolved).length;
+  const open     = total - resolved;
+  const courses  = new Set(allConflicts.map(c => c.course_id)).size;
+  const rate     = total ? Math.round(resolved / total * 100) : 0;
+
+  document.getElementById('c-total').textContent    = total;
+  document.getElementById('c-resolved').textContent = resolved;
+  document.getElementById('c-open').textContent     = open;
+  document.getElementById('c-courses').textContent  = courses;
+  document.getElementById('c-rate').textContent     = rate + '%';
+
+  // Populate reason filter
+  const reasons = [...new Set(allConflicts.map(c => c.reason))];
+  const sel = document.getElementById('filter-reason');
+  reasons.forEach(r => {
+    const o = document.createElement('option');
+    o.value = r; o.textContent = reasonLabel(r); sel.appendChild(o);
+  });
+
+  renderChartReasons(allConflicts);
+  renderChartHeatmap(allConflicts);
+  renderTopCourses(allConflicts);
+  renderPage(1);
+}
+
+// ── Chart: reasons bar ────────────────────────────────────────────────────────
+function renderChartReasons(data) {
+  const counts = {};
+  data.forEach(c => { const k = reasonLabel(c.reason); counts[k] = (counts[k]||0)+1; });
+  if (!Object.keys(counts).length) {
+    document.getElementById('chart-reasons').innerHTML =
+      '<div class="flex items-center justify-center h-full text-slate-500 text-sm">No data</div>';
+    return;
+  }
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  Plotly.newPlot('chart-reasons', [{
+    x: entries.map(e=>e[1]), y: entries.map(e=>e[0]),
+    type: 'bar', orientation: 'h',
+    marker: {
+      color: entries.map((_,i) => `rgba(${[239,68,68,99,102,241,245,158,11][i%3*3]},${[239,68,68,99,102,241,245,158,11][i%3*3+1]},${[239,68,68,99,102,241,245,158,11][i%3*3+2]},0.7)`),
+      color: ['rgba(239,68,68,0.7)','rgba(245,158,11,0.7)','rgba(99,102,241,0.7)','rgba(16,185,129,0.7)']
+        .slice(0, entries.length),
+    },
+    hovertemplate: '<b>%{y}</b>: %{x}<extra></extra>',
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{ family:'Inter,sans-serif', color:'#94a3b8', size:11 },
+    margin:{ t:5, b:25, l:160, r:10 },
+    xaxis:{ gridcolor:'rgba(99,102,241,0.08)', zerolinecolor:'transparent', tickfont:{size:10} },
+    yaxis:{ gridcolor:'transparent', tickfont:{size:10} },
+  }, PLOTLY_CONFIG);
+}
+
+// ── Chart: day×slot heatmap ───────────────────────────────────────────────────
+function renderChartHeatmap(data) {
+  const DAYS  = ['Mon','Tue','Wed','Thu','Fri'];
+  const SLOTS = ['08:00','10:00','12:00','14:00','16:00'];
+  const grid  = {};
+  DAYS.forEach(d => { grid[d]={}; SLOTS.forEach(s => grid[d][s]=0); });
+  data.forEach(c => { if (c.day && c.time_slot && grid[c.day]) grid[c.day][c.time_slot]++; });
+
+  const z = SLOTS.map(s => DAYS.map(d => grid[d][s]));
+  Plotly.newPlot('chart-heatmap', [{
+    z, x: DAYS, y: SLOTS,
+    type: 'heatmap',
+    colorscale: [[0,'rgba(15,23,42,0.4)'],[0.5,'rgba(239,68,68,0.4)'],[1,'rgba(239,68,68,0.9)']],
+    showscale: false,
+    hovertemplate: '<b>%{x} %{y}</b><br>%{z} conflicts<extra></extra>',
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{ family:'Inter,sans-serif', color:'#94a3b8', size:11 },
+    margin:{ t:5, b:30, l:55, r:10 },
+    xaxis:{ gridcolor:'transparent', tickfont:{size:11} },
+    yaxis:{ gridcolor:'transparent', tickfont:{size:10}, autorange:'reversed' },
+  }, PLOTLY_CONFIG);
+}
+
+// ── Top conflicted courses ────────────────────────────────────────────────────
+function renderTopCourses(data) {
+  const counts = {};
+  const names  = {};
+  data.forEach(c => {
+    counts[c.course_id] = (counts[c.course_id]||0)+1;
+    names[c.course_id]  = c.course_name || `Course #${c.course_id}`;
+  });
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max = top[0]?.[1] || 1;
+
+  document.getElementById('top-courses').innerHTML = top.length
+    ? top.map(([id,cnt]) => {
+        const resolved = data.filter(c=>c.course_id==id && c.resolved).length;
+        const pct = Math.round(cnt/max*100);
+        return `
+          <div class="flex items-center gap-3">
+            <div class="w-40 shrink-0">
+              <div class="text-xs font-medium text-slate-300 truncate">${esc(names[id])}</div>
+              <div class="text-xs text-slate-500">#${id}</div>
+            </div>
+            <div class="flex-1">
+              <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+            </div>
+            <div class="text-xs text-slate-400 w-20 text-right shrink-0">
+              ${cnt} conflict${cnt!==1?'s':''}
+              <span class="text-emerald-500 ml-1">${resolved} ✓</span>
+            </div>
+          </div>`;
+      }).join('')
+    : '<p class="text-slate-500 text-sm">No conflicts recorded.</p>';
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function getFiltered() {
+  const rv  = document.getElementById('filter-resolved').value;
+  const rr  = document.getElementById('filter-reason').value;
+  const rd  = document.getElementById('filter-day').value;
+  return allConflicts.filter(c =>
+    (!rv || (rv==='yes' ? c.resolved : !c.resolved)) &&
+    (!rr || c.reason === rr) &&
+    (!rd || c.day === rd)
+  );
+}
+
+function renderPage(page) {
+  currentPage = page;
+  const filtered   = getFiltered();
+  const total      = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const start      = (page-1)*PER_PAGE;
+  const slice      = filtered.slice(start, start+PER_PAGE);
+
+  document.getElementById('page-info').textContent =
+    `Showing ${Math.min(start+1,total)}–${Math.min(start+PER_PAGE,total)} of ${total}`;
+
+  const tbody = document.getElementById('conflict-table');
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="px-5 py-10 text-center text-slate-500">
+      <svg class="w-10 h-10 text-slate-700 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>No conflicts match the current filters</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = slice.map((c, i) => {
+    const rc = reasonClass(c.reason);
+    const outcome = c.resolved
+      ? `<div class="text-xs font-medium text-emerald-300">✓ Placed</div>
+         <div class="text-xs text-slate-500 font-mono">${c.resolved_day} ${c.resolved_slot} · Rm ${c.resolved_room}</div>`
+      : `<span class="text-xs font-medium text-rose-300">✗ Unscheduled</span>`;
+
+    return `
+      <tr class="tbl-row cursor-pointer" onclick="openModal(${start+i}, ${JSON.stringify(c).replace(/"/g,'&quot;')})">
+        <td class="td px-5 text-slate-600 text-xs font-mono">${start+i+1}</td>
+        <td class="td px-4">
+          <div class="text-xs font-medium text-slate-200">${esc(c.course_name||'—')}</div>
+          <div class="text-xs text-slate-500 font-mono">#${c.course_id} · ${c.required_type||''} · ${c.duration_hours||'?'}h</div>
+        </td>
+        <td class="td px-4">
+          <div class="text-xs text-slate-300">${esc(c.teacher_name||'—')}</div>
+        </td>
+        <td class="td px-4">
+          <div class="text-xs text-slate-300">${esc(c.group_name||'—')}</div>
+          <div class="text-xs text-slate-500">${c.group_size ? c.group_size+' students' : ''}</div>
+        </td>
+        <td class="td px-4">
+          <span class="font-medium text-slate-300 text-xs">${c.day||'—'}</span>
+          <span class="font-mono text-xs text-slate-500 ml-1">${c.time_slot||''}</span>
+        </td>
+        <td class="td px-4 text-xs text-slate-400">
+          ${c.room_id ? `Rm ${c.room_id}` : '—'}
+          ${c.room_capacity ? `<span class="text-slate-600"> · cap ${c.room_capacity}</span>` : ''}
+        </td>
+        <td class="td px-4">
+          <span class="text-xs px-2 py-0.5 rounded-lg font-medium ${rc}">${reasonLabel(c.reason)}</span>
+        </td>
+        <td class="td px-4 text-xs text-slate-400 font-mono">
+          ${c.attempt != null ? `#${c.attempt}` : '—'}
+          ${c.total_candidates != null ? `<span class="text-slate-600"> / ${c.total_candidates}</span>` : ''}
+        </td>
+        <td class="td px-4">${outcome}</td>
+      </tr>`;
+  }).join('');
+
+  // Pagination
+  const pg = document.getElementById('pagination');
+  pg.innerHTML = '';
+  const btn = (label, p, disabled=false, active=false) => {
+    const b = document.createElement('button');
+    b.textContent = label; b.disabled = disabled;
+    b.className = `px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+      active   ? 'bg-brand-600 text-white' :
+      disabled ? 'text-slate-700 cursor-not-allowed' :
+                 'text-slate-400 hover:bg-slate-700/50 border border-slate-600/40'}`;
+    if (!disabled) b.addEventListener('click', () => renderPage(p));
+    return b;
+  };
+  pg.appendChild(btn('←', page-1, page===1));
+  for (let p=Math.max(1,page-2); p<=Math.min(totalPages,page+2); p++)
+    pg.appendChild(btn(p, p, false, p===page));
+  pg.appendChild(btn('→', page+1, page===totalPages));
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(idx, c) {
+  const rc = reasonClass(c.reason);
+  document.getElementById('modal-body').innerHTML = `
+    <div class="flex items-start gap-3 mb-5">
+      <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0 text-lg">⚠</div>
+      <div>
+        <p class="font-semibold text-white">${esc(c.course_name||'Unknown course')}</p>
+        <span class="text-xs px-2 py-0.5 rounded-lg font-medium ${rc}">${reasonLabel(c.reason)}</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 text-sm mb-4">
+      ${mrow('Course ID',    '#'+c.course_id)}
+      ${mrow('Type',         c.required_type||'—')}
+      ${mrow('Duration',     (c.duration_hours||'?')+'h')}
+      ${mrow('Teacher',      c.teacher_name||'—')}
+      ${mrow('Group',        c.group_name||'—')}
+      ${mrow('Group size',   c.group_size ? c.group_size+' students' : '—')}
+      ${mrow('Rejected day', c.day||'—')}
+      ${mrow('Rejected slot',c.time_slot||'—')}
+      ${mrow('Rejected room',c.room_id ? 'Room '+c.room_id+(c.room_capacity?' (cap '+c.room_capacity+')':'') : '—')}
+      ${mrow('Attempt #',    c.attempt!=null ? c.attempt+' of '+c.total_candidates+' candidates' : '—')}
+    </div>
+
+    <div class="rounded-xl p-3 mb-1 ${c.resolved ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-rose-500/10 border border-rose-500/20'}">
+      <p class="text-xs font-semibold ${c.resolved ? 'text-emerald-300' : 'text-rose-300'} mb-1">
+        ${c.resolved ? '✓ Conflict resolved — course was successfully placed' : '✗ Conflict unresolved — course could not be scheduled'}
+      </p>
+      ${c.resolved ? `<p class="text-xs text-slate-400">Final placement: <span class="font-mono text-slate-300">${c.resolved_day} ${c.resolved_slot} · Room ${c.resolved_room}</span></p>` : ''}
+    </div>`;
+
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
+}
+
+function mrow(label, value) {
+  return `<div class="glass rounded-xl p-2.5">
+    <div class="text-xs text-slate-500 mb-0.5">${label}</div>
+    <div class="text-xs font-medium text-slate-200">${value}</div>
+  </div>`;
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal').classList.remove('flex');
+}
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+['filter-resolved','filter-reason','filter-day'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => renderPage(1))
+);
+
+loadAll();
+</script>
+{% endblock %}
